@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-Time Budget Planner (INR)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 h-screen w-screen overflow-hidden flex flex-col p-4 md:p-8">
+
+  <main class="w-full h-full bg-slate-800 border border-slate-700 rounded-3xl shadow-2xl p-6 md:p-8 flex flex-col space-y-6 overflow-hidden">
+    
+    <!-- App Header -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700/60 pb-4">
+      <div>
+        <h1 class="text-3xl font-bold text-white tracking-tight">Budget Planner <span class="text-indigo-400 text-xl">(₹)</span></h1>
+        <p class="text-sm text-slate-400 mt-0.5">Track income, expenses, and remaining balance with persistent IndexedDB storage</p>
+      </div>
+
+      <!-- Header Controls: Tabs & Export Button -->
+      <div class="flex items-center gap-3 w-full md:w-auto">
+        <!-- Navigation Tabs -->
+        <div class="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-700/60 w-full md:w-72">
+          <button 
+            id="tab-income-btn" 
+            class="flex-1 py-2 text-sm font-semibold rounded-xl transition bg-emerald-600 text-white shadow"
+            onclick="switchTab('income')"
+          >
+            Income
+          </button>
+          <button 
+            id="tab-expense-btn" 
+            class="flex-1 py-2 text-sm font-semibold rounded-lg transition text-slate-400 hover:text-white"
+            onclick="switchTab('expense')"
+          >
+            Expense
+          </button>
+        </div>
+
+        <!-- Export Button -->
+        <button 
+          id="export-btn"
+          onclick="exportDataAsTxt()"
+          class="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white font-medium text-sm py-2.5 px-4 rounded-2xl transition shadow shrink-0"
+          title="Export data as .txt file"
+        >
+          <svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          <span class="hidden sm:inline">Export</span> (.txt)
+        </button>
+      </div>
+    </header>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+      <div class="bg-slate-900/80 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+        <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total Income</p>
+        <p id="total-income" class="text-3xl font-extrabold text-emerald-400 mt-2">₹0.00</p>
+      </div>
+      <div class="bg-slate-900/80 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+        <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total Expenses</p>
+        <p id="total-expense" class="text-3xl font-extrabold text-rose-400 mt-2">₹0.00</p>
+      </div>
+      <div class="bg-slate-900/80 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+        <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Remaining Balance</p>
+        <p id="total-balance" class="text-3xl font-extrabold text-indigo-400 mt-2">₹0.00</p>
+      </div>
+    </div>
+
+    <!-- Main Working Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+      
+      <!-- Entry Form -->
+      <form id="entry-form" class="lg:col-span-4 bg-slate-900/60 border border-slate-700/60 rounded-2xl p-5 flex flex-col space-y-4 h-fit">
+        <h2 class="text-base font-semibold text-slate-200" id="form-heading">Add New Income Entry</h2>
+        
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1 font-medium" for="item-name">Item Description</label>
+            <input 
+              type="text" 
+              id="item-name" 
+              placeholder="e.g. Monthly Salary, Grocery" 
+              required 
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition placeholder-slate-500"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs text-slate-400 mb-1 font-medium" for="item-amount">Amount (₹)</label>
+            <input 
+              type="number" 
+              id="item-amount" 
+              placeholder="0.00" 
+              step="0.01" 
+              min="0.01" 
+              required 
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition placeholder-slate-500"
+            />
+          </div>
+        </div>
+
+        <button 
+          type="submit" 
+          id="submit-btn" 
+          class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm rounded-xl transition shadow-lg shadow-emerald-600/20 mt-auto"
+        >
+          Add Income Entry
+        </button>
+      </form>
+
+      <!-- Active List Section -->
+      <section class="lg:col-span-8 bg-slate-900/60 border border-slate-700/60 rounded-2xl p-5 flex flex-col h-full min-h-0 overflow-hidden space-y-3">
+        <div class="flex justify-between items-center border-b border-slate-700/60 pb-3">
+          <span id="list-title" class="font-semibold text-sm uppercase tracking-wider text-slate-300">Income Entries</span>
+          <span id="entry-count" class="text-xs bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full text-slate-400">0 items</span>
+        </div>
+
+        <!-- Scrollable List Container -->
+        <div id="entries-list" class="flex-1 overflow-y-auto space-y-2.5 pr-2 custom-scrollbar">
+          <!-- Dynamic items render here -->
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <script>
+    // --- INDEXEDDB STORAGE ENGINE ---
+    const DB_NAME = 'BudgetPlannerDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'entries';
+    let db = null;
+
+    // Initialize IndexedDB and request persistent storage
+    function initStorage() {
+      return new Promise((resolve, reject) => {
+        if (navigator.storage && navigator.storage.persist) {
+          navigator.storage.persist().then(granted => {
+            console.log(granted ? "Storage persistence granted" : "Storage persistence denied");
+          });
+        }
+
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          }
+        };
+
+        request.onsuccess = (event) => {
+          db = event.target.result;
+          resolve(db);
+        };
+
+        request.onerror = (event) => {
+          console.error("IndexedDB Error:", event.target.error);
+          reject(event.target.error);
+        };
+      });
+    }
+
+    // Load all entries from IndexedDB
+    function loadEntriesFromDB() {
+      return new Promise((resolve) => {
+        if (!db) return resolve([]);
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.getAll();
+
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => resolve([]);
+      });
+    }
+
+    // Save an entry to IndexedDB
+    function saveEntryToDB(entry) {
+      return new Promise((resolve) => {
+        if (!db) return resolve();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.put(entry);
+        tx.oncomplete = () => resolve();
+      });
+    }
+
+    // Delete an entry from IndexedDB
+    function deleteEntryFromDB(id) {
+      return new Promise((resolve) => {
+        if (!db) return resolve();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.delete(id);
+        tx.oncomplete = () => resolve();
+      });
+    }
+
+    // --- APPLICATION STATE & LOGIC ---
+    let currentTab = 'income'; 
+    let entries = [];
+    let editingId = null; // Track which entry is being edited
+
+    // DOM Elements
+    const tabIncomeBtn = document.getElementById('tab-income-btn');
+    const tabExpenseBtn = document.getElementById('tab-expense-btn');
+    const entryForm = document.getElementById('entry-form');
+    const formHeading = document.getElementById('form-heading');
+    const itemNameInput = document.getElementById('item-name');
+    const itemAmountInput = document.getElementById('item-amount');
+    const submitBtn = document.getElementById('submit-btn');
+    const listTitle = document.getElementById('list-title');
+    const entriesList = document.getElementById('entries-list');
+    const entryCount = document.getElementById('entry-count');
+
+    const totalIncomeEl = document.getElementById('total-income');
+    const totalExpenseEl = document.getElementById('total-expense');
+    const totalBalanceEl = document.getElementById('total-balance');
+
+    // Tab Switching Logic
+    function switchTab(tab) {
+      currentTab = tab;
+      if (tab === 'income') {
+        tabIncomeBtn.className = 'flex-1 py-2 text-sm font-semibold rounded-xl transition bg-emerald-600 text-white shadow';
+        tabExpenseBtn.className = 'flex-1 py-2 text-sm font-semibold rounded-xl transition text-slate-400 hover:text-white';
+        submitBtn.className = 'w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm rounded-xl transition shadow-lg shadow-emerald-600/20';
+        submitBtn.textContent = 'Add Income Entry';
+        formHeading.textContent = 'Add New Income Entry';
+        listTitle.textContent = 'Income Entries';
+      } else {
+        tabExpenseBtn.className = 'flex-1 py-2 text-sm font-semibold rounded-xl transition bg-rose-600 text-white shadow';
+        tabIncomeBtn.className = 'flex-1 py-2 text-sm font-semibold rounded-xl transition text-slate-400 hover:text-white';
+        submitBtn.className = 'w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-medium text-sm rounded-xl transition shadow-lg shadow-rose-600/20';
+        submitBtn.textContent = 'Add Expense Entry';
+        formHeading.textContent = 'Add New Expense Entry';
+        listTitle.textContent = 'Expense Entries';
+      }
+      // Reset edit state when switching tabs
+      editingId = null;
+      resetForm();
+      render();
+    }
+
+    // Reset form to add mode
+    function resetForm() {
+      itemNameInput.value = '';
+      itemAmountInput.value = '';
+      if (currentTab === 'income') {
+        submitBtn.textContent = 'Add Income Entry';
+        formHeading.textContent = 'Add New Income Entry';
+        submitBtn.className = 'w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm rounded-xl transition shadow-lg shadow-emerald-600/20';
+      } else {
+        submitBtn.textContent = 'Add Expense Entry';
+        formHeading.textContent = 'Add New Expense Entry';
+        submitBtn.className = 'w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-medium text-sm rounded-xl transition shadow-lg shadow-rose-600/20';
+      }
+      editingId = null;
+    }
+
+    // Add or Update Entry
+    entryForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const name = itemNameInput.value.trim();
+      const amount = parseFloat(itemAmountInput.value);
+
+      if (!name || isNaN(amount) || amount <= 0) return;
+
+      if (editingId) {
+        // --- UPDATE EXISTING ENTRY ---
+        const index = entries.findIndex(entry => entry.id === editingId);
+        if (index !== -1) {
+          const updatedEntry = {
+            ...entries[index],
+            name: name,
+            amount: amount
+          };
+          entries[index] = updatedEntry;
+          await saveEntryToDB(updatedEntry);
+        }
+        resetForm();
+      } else {
+        // --- ADD NEW ENTRY ---
+        const newEntry = {
+          id: Date.now(),
+          type: currentTab,
+          name: name,
+          amount: amount
+        };
+        entries.push(newEntry);
+        await saveEntryToDB(newEntry);
+        itemNameInput.value = '';
+        itemAmountInput.value = '';
+        itemNameInput.focus();
+      }
+
+      render();
+    });
+
+    // Delete Entry
+    async function deleteEntry(id) {
+      if (!confirm('Delete this entry permanently?')) return;
+      const index = entries.findIndex(entry => entry.id === id);
+      if (index !== -1) {
+        entries.splice(index, 1);
+        await deleteEntryFromDB(id);
+        // If we were editing this entry, reset form
+        if (editingId === id) resetForm();
+        render();
+      }
+    }
+
+    // Edit Entry
+    function editEntry(id) {
+      const entry = entries.find(entry => entry.id === id);
+      if (!entry) return;
+
+      // Switch to the correct tab if needed
+      if (entry.type !== currentTab) {
+        switchTab(entry.type);
+      }
+
+      // Populate form
+      editingId = id;
+      itemNameInput.value = entry.name;
+      itemAmountInput.value = entry.amount;
+      itemNameInput.focus();
+
+      // Update UI to show we are editing
+      if (entry.type === 'income') {
+        submitBtn.textContent = 'Update Income Entry';
+        formHeading.textContent = 'Edit Income Entry';
+        submitBtn.className = 'w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white font-medium text-sm rounded-xl transition shadow-lg shadow-amber-600/20';
+      } else {
+        submitBtn.textContent = 'Update Expense Entry';
+        formHeading.textContent = 'Edit Expense Entry';
+        submitBtn.className = 'w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white font-medium text-sm rounded-xl transition shadow-lg shadow-amber-600/20';
+      }
+    }
+
+    // Cancel edit
+    function cancelEdit() {
+      resetForm();
+      render();
+    }
+
+    // --- TXT EXPORT FUNCTIONALITY ---
+    function exportDataAsTxt() {
+      if (entries.length === 0) {
+        alert("No entries to export!");
+        return;
+      }
+
+      let totalIncome = 0;
+      let totalExpense = 0;
+      let runningBalance = 0;
+
+      let incomeListTxt = "--- INCOME ENTRIES ---\n";
+      let expenseListTxt = "--- EXPENSE ENTRIES ---\n";
+      let incomeCount = 0;
+      let expenseCount = 0;
+
+      entries.forEach(entry => {
+        if (entry.type === 'income') {
+          totalIncome += entry.amount;
+          runningBalance += entry.amount;
+          incomeCount++;
+          incomeListTxt += `- ${entry.name}: +₹${entry.amount.toFixed(2)} (Balance Left: ₹${runningBalance.toFixed(2)})\n`;
+        } else {
+          totalExpense += entry.amount;
+          runningBalance -= entry.amount;
+          expenseCount++;
+          expenseListTxt += `- ${entry.name}: -₹${entry.amount.toFixed(2)} (Balance Left: ₹${runningBalance.toFixed(2)})\n`;
+        }
+      });
+
+      if (incomeCount === 0) incomeListTxt += "None\n";
+      if (expenseCount === 0) expenseListTxt += "None\n";
+
+      const currentDate = new Date().toLocaleDateString();
+      const currentTime = new Date().toLocaleTimeString();
+
+      const txtContent = 
+`==================================================
+              BUDGET PLANNER REPORT (INR)          
+==================================================
+Generated on: ${currentDate} at ${currentTime}
+
+SUMMARY:
+--------------------------------------------------
+Total Income   : ₹${totalIncome.toFixed(2)}
+Total Expenses : ₹${totalExpense.toFixed(2)}
+Net Remaining  : ₹${(totalIncome - totalExpense).toFixed(2)}
+--------------------------------------------------
+
+${incomeListTxt}
+${expenseListTxt}
+==================================================
+End of Report
+`;
+
+      // Create downloadable Blob
+      const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `budget_report_inr_${Date.now()}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    // Recalculate totals and re-render UI
+    function render() {
+      let totalIncome = 0;
+      let totalExpense = 0;
+      let runningBalance = 0;
+
+      const entriesWithBalance = entries.map(entry => {
+        if (entry.type === 'income') {
+          totalIncome += entry.amount;
+          runningBalance += entry.amount;
+        } else {
+          totalExpense += entry.amount;
+          runningBalance -= entry.amount;
+        }
+        return { ...entry, balanceAfter: runningBalance };
+      });
+
+      const netBalance = totalIncome - totalExpense;
+
+      // Update Summary Cards with INR symbol
+      totalIncomeEl.textContent = `₹${totalIncome.toFixed(2)}`;
+      totalExpenseEl.textContent = `₹${totalExpense.toFixed(2)}`;
+      totalBalanceEl.textContent = `₹${netBalance.toFixed(2)}`;
+
+      if (netBalance < 0) {
+        totalBalanceEl.className = 'text-3xl font-extrabold text-rose-400 mt-2';
+      } else {
+        totalBalanceEl.className = 'text-3xl font-extrabold text-indigo-400 mt-2';
+      }
+
+      // Render List for Active Tab
+      const activeEntries = entriesWithBalance.filter(entry => entry.type === currentTab);
+      entryCount.textContent = `${activeEntries.length} items`;
+
+      if (activeEntries.length === 0) {
+        entriesList.innerHTML = `
+          <div class="flex flex-col items-center justify-center h-full text-slate-500 text-sm border border-dashed border-slate-700/60 rounded-xl p-8">
+            No ${currentTab} entries recorded yet.
+          </div>
+        `;
+        return;
+      }
+
+      entriesList.innerHTML = activeEntries.slice().reverse().map(entry => {
+        const isIncome = entry.type === 'income';
+        const badgeColor = isIncome ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-rose-400 bg-rose-500/10 border-rose-500/20';
+        const amountPrefix = isIncome ? '+' : '-';
+        const isEditing = editingId === entry.id;
+
+        return `
+          <div class="flex items-center justify-between bg-slate-900 border ${isEditing ? 'border-amber-500/60 ring-1 ring-amber-500/30' : 'border-slate-700/60'} rounded-xl p-4 text-sm hover:border-slate-600 transition">
+            <div class="space-y-1 flex-1 min-w-0">
+              <p class="font-semibold text-slate-200 text-base truncate">${escapeHtml(entry.name)}</p>
+              <p class="text-xs text-slate-400">
+                Left after this entry: 
+                <span class="font-semibold ${entry.balanceAfter < 0 ? 'text-rose-400' : 'text-slate-300'}">
+                  ₹${entry.balanceAfter.toFixed(2)}
+                </span>
+              </p>
+            </div>
+            <div class="flex items-center space-x-2 ml-4 shrink-0">
+              <span class="font-bold px-3 py-1.5 rounded-xl text-sm border ${badgeColor}">
+                ${amountPrefix}₹${entry.amount.toFixed(2)}
+              </span>
+              <!-- Edit Button -->
+              <button 
+                onclick="editEntry(${entry.id})" 
+                class="text-slate-500 hover:text-amber-400 transition p-1"
+                title="Edit Entry"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                </svg>
+              </button>
+              <!-- Delete Button -->
+              <button 
+                onclick="deleteEntry(${entry.id})" 
+                class="text-slate-500 hover:text-rose-400 transition p-1"
+                title="Delete Entry"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    // Boot App: Initialize DB -> Load Data -> Render UI
+    initStorage().then(async () => {
+      entries = await loadEntriesFromDB();
+      render();
+    });
+  </script>
+</body>
+</html>
