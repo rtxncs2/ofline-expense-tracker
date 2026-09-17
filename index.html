@@ -6,7 +6,7 @@
   <title>Real-Time Budget Planner (INR)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
@@ -31,9 +31,9 @@
       }
     }
 
-    /* Ensure the list can scroll on desktop, but on mobile it grows naturally */
+    /* Ensure list and table containers can scroll on desktop */
     @media (min-width: 1024px) {
-      #entries-list {
+      #entries-list, #passbook-container {
         overflow-y: auto;
       }
     }
@@ -50,6 +50,21 @@
         <p class="text-xs sm:text-sm text-slate-400 mt-0.5">Track income, expenses, and remaining balance</p>
       </div>
 
+      <!-- Center Top: Standalone Passbook Button -->
+      <div class="flex justify-center md:flex-1 md:px-4">
+        <button 
+          id="tab-passbook-btn" 
+          onclick="togglePassbook()"
+          class="flex items-center justify-center gap-2 px-5 py-2 text-xs sm:text-sm font-semibold rounded-xl sm:rounded-2xl transition border border-slate-700 bg-slate-900 text-slate-300 hover:text-white hover:border-slate-600 shadow-sm"
+        >
+          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+          </svg>
+          <span>Bank Passbook</span>
+        </button>
+      </div>
+
+      <!-- Right Controls: Income/Expense Switcher & Export -->
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full md:w-auto">
         <div class="flex bg-slate-900 p-1 rounded-xl sm:rounded-2xl border border-slate-700/60 w-full sm:w-72">
           <button 
@@ -97,8 +112,8 @@
       </div>
     </div>
 
-    <!-- Main Working Section -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 md:gap-6 lg:flex-1 lg:min-h-0">
+    <!-- Main Working Section for Income/Expense -->
+    <div id="standard-view" class="grid grid-cols-1 lg:grid-cols-12 gap-3 md:gap-6 lg:flex-1 lg:min-h-0">
 
       <!-- Entry Form -->
       <form id="entry-form" class="lg:col-span-4 bg-slate-900/60 border border-slate-700/60 rounded-xl sm:rounded-2xl p-3 sm:p-5 flex flex-col space-y-2 sm:space-y-4 h-fit">
@@ -153,6 +168,35 @@
       </section>
 
     </div>
+
+    <!-- Passbook Spreadsheet View -->
+    <section id="passbook-view" class="hidden flex-1 flex-col bg-slate-900/60 border border-slate-700/60 rounded-xl sm:rounded-2xl p-3 sm:p-5 lg:h-full lg:min-h-0 lg:overflow-hidden space-y-2 sm:space-y-3">
+      <div class="flex justify-between items-center border-b border-slate-700/60 pb-2 sm:pb-3">
+        <div>
+          <span class="font-semibold text-xs sm:text-sm uppercase tracking-wider text-indigo-400">Bank Passbook Ledger</span>
+          <p class="text-[10px] sm:text-xs text-slate-400">Sequential statement with chronological balance tracking</p>
+        </div>
+        <span id="passbook-count" class="text-[10px] sm:text-xs bg-slate-800 border border-slate-700 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-slate-400">0 entries</span>
+      </div>
+
+      <div id="passbook-container" class="w-full lg:flex-1 overflow-x-auto custom-scrollbar rounded-lg sm:rounded-xl border border-slate-700/60">
+        <table class="w-full text-center text-xs sm:text-sm border-collapse font-mono min-w-[720px]">
+          <thead class="bg-slate-900 sticky top-0 border-b border-slate-700 text-slate-400 text-[11px] uppercase tracking-wider select-none z-10">
+            <tr>
+              <th scope="col" class="py-2.5 px-3 border-r border-slate-700/80 w-16 text-center">Sl No.</th>
+              <th scope="col" class="py-2.5 px-4 border-r border-slate-700/80 text-center">Item Name</th>
+              <th scope="col" class="py-2.5 px-4 border-r border-slate-700/80 text-center">Prev. Balance</th>
+              <th scope="col" class="py-2.5 px-4 border-r border-slate-700/80 text-center">Trxn Amount</th>
+              <th scope="col" class="py-2.5 px-4 border-r border-slate-700/80 text-center">Income / Expense</th>
+              <th scope="col" class="py-2.5 px-4 text-center">Balance</th>
+            </tr>
+          </thead>
+          <tbody id="passbook-tbody" class="divide-y divide-slate-800 text-slate-200">
+            <!-- Dynamic spreadsheet rows render here -->
+          </tbody>
+        </table>
+      </div>
+    </section>
 
   </main>
 
@@ -223,11 +267,17 @@
     }
 
     let currentTab = 'income'; 
+    let isPassbookActive = false;
     let entries = [];
     let editingId = null;
 
     const tabIncomeBtn = document.getElementById('tab-income-btn');
     const tabExpenseBtn = document.getElementById('tab-expense-btn');
+    const tabPassbookBtn = document.getElementById('tab-passbook-btn');
+    
+    const standardView = document.getElementById('standard-view');
+    const passbookView = document.getElementById('passbook-view');
+
     const entryForm = document.getElementById('entry-form');
     const formHeading = document.getElementById('form-heading');
     const itemNameInput = document.getElementById('item-name');
@@ -237,12 +287,42 @@
     const entriesList = document.getElementById('entries-list');
     const entryCount = document.getElementById('entry-count');
 
+    const passbookTbody = document.getElementById('passbook-tbody');
+    const passbookCount = document.getElementById('passbook-count');
+
     const totalIncomeEl = document.getElementById('total-income');
     const totalExpenseEl = document.getElementById('total-expense');
     const totalBalanceEl = document.getElementById('total-balance');
 
+    function togglePassbook() {
+      isPassbookActive = !isPassbookActive;
+
+      if (isPassbookActive) {
+        tabPassbookBtn.className = 'flex items-center justify-center gap-2 px-5 py-2 text-xs sm:text-sm font-semibold rounded-xl sm:rounded-2xl transition bg-indigo-600 text-white shadow-md border border-indigo-500';
+        standardView.classList.add('hidden');
+        passbookView.classList.remove('hidden');
+        passbookView.classList.add('flex');
+
+        // Mute income/expense selector buttons visually while viewing passbook
+        tabIncomeBtn.className = 'flex-1 py-2 text-xs sm:text-sm font-semibold rounded-lg sm:rounded-xl transition text-slate-500 hover:text-slate-300';
+        tabExpenseBtn.className = 'flex-1 py-2 text-xs sm:text-sm font-semibold rounded-lg sm:rounded-xl transition text-slate-500 hover:text-slate-300';
+      } else {
+        switchTab(currentTab);
+      }
+      render();
+    }
+
     function switchTab(tab) {
       currentTab = tab;
+      isPassbookActive = false;
+
+      // Reset passbook center button style
+      tabPassbookBtn.className = 'flex items-center justify-center gap-2 px-5 py-2 text-xs sm:text-sm font-semibold rounded-xl sm:rounded-2xl transition border border-slate-700 bg-slate-900 text-slate-300 hover:text-white hover:border-slate-600 shadow-sm';
+
+      standardView.classList.remove('hidden');
+      passbookView.classList.add('hidden');
+      passbookView.classList.remove('flex');
+
       if (tab === 'income') {
         tabIncomeBtn.className = 'flex-1 py-2 text-xs sm:text-sm font-semibold rounded-lg sm:rounded-xl transition bg-emerald-600 text-white shadow';
         tabExpenseBtn.className = 'flex-1 py-2 text-xs sm:text-sm font-semibold rounded-lg sm:rounded-xl transition text-slate-400 hover:text-white';
@@ -258,6 +338,7 @@
         formHeading.textContent = 'Add New Expense Entry';
         listTitle.textContent = 'Expense Entries';
       }
+
       editingId = null;
       resetForm();
       render();
@@ -338,16 +419,35 @@
       let totalIncome = 0, totalExpense = 0, runningBalance = 0;
       let incomeListTxt = "--- INCOME ENTRIES ---\n";
       let expenseListTxt = "--- EXPENSE ENTRIES ---\n";
+      let passbookTxt = "--- PASSBOOK STATEMENT ---\n";
       let incomeCount = 0, expenseCount = 0;
 
-      entries.forEach(entry => {
-        if (entry.type === 'income') {
-          totalIncome += entry.amount; runningBalance += entry.amount; incomeCount++;
+      passbookTxt += "Sl No. | Item Name             | Prev. Balance | Trxn Amount  | Type    | Balance\n";
+      passbookTxt += "----------------------------------------------------------------------------------\n";
+
+      entries.forEach((entry, idx) => {
+        const prev = runningBalance;
+        const isIncome = entry.type === 'income';
+        if (isIncome) {
+          totalIncome += entry.amount;
+          runningBalance += entry.amount;
+          incomeCount++;
           incomeListTxt += `- ${entry.name}: +₹${entry.amount.toFixed(2)} (Balance Left: ₹${runningBalance.toFixed(2)})\n`;
         } else {
-          totalExpense += entry.amount; runningBalance -= entry.amount; expenseCount++;
+          totalExpense += entry.amount;
+          runningBalance -= entry.amount;
+          expenseCount++;
           expenseListTxt += `- ${entry.name}: -₹${entry.amount.toFixed(2)} (Balance Left: ₹${runningBalance.toFixed(2)})\n`;
         }
+
+        const sl = String(idx + 1).padEnd(6);
+        const name = entry.name.slice(0, 21).padEnd(21);
+        const prevStr = ("₹" + prev.toFixed(2)).padStart(13);
+        const amtStr = ("₹" + entry.amount.toFixed(2)).padStart(12);
+        const typeStr = (isIncome ? "Income" : "Expense").padEnd(7);
+        const balStr = ("₹" + runningBalance.toFixed(2)).padStart(13);
+
+        passbookTxt += `${sl} | ${name} | ${prevStr} | ${amtStr} | ${typeStr} | ${balStr}\n`;
       });
 
       if (incomeCount === 0) incomeListTxt += "None\n";
@@ -371,6 +471,7 @@ Net Remaining  : ₹${(totalIncome - totalExpense).toFixed(2)}
 
 ${incomeListTxt}
 ${expenseListTxt}
+${passbookTxt}
 ==================================================
 End of Report
 `;
@@ -389,10 +490,21 @@ End of Report
     function render() {
       let totalIncome = 0, totalExpense = 0, runningBalance = 0;
 
-      const entriesWithBalance = entries.map(entry => {
-        if (entry.type === 'income') { totalIncome += entry.amount; runningBalance += entry.amount; }
-        else { totalExpense += entry.amount; runningBalance -= entry.amount; }
-        return { ...entry, balanceAfter: runningBalance };
+      const entriesWithBalance = entries.map((entry, idx) => {
+        const prevBal = runningBalance;
+        if (entry.type === 'income') {
+          totalIncome += entry.amount;
+          runningBalance += entry.amount;
+        } else {
+          totalExpense += entry.amount;
+          runningBalance -= entry.amount;
+        }
+        return { 
+          ...entry, 
+          slNo: idx + 1,
+          prevBalance: prevBal, 
+          balanceAfter: runningBalance 
+        };
       });
 
       const netBalance = totalIncome - totalExpense;
@@ -407,6 +519,7 @@ End of Report
         totalBalanceEl.className = 'text-base sm:text-3xl font-extrabold text-indigo-400 mt-1 sm:mt-2';
       }
 
+      // Render standard view (Income/Expense list)
       const activeEntries = entriesWithBalance.filter(entry => entry.type === currentTab);
       entryCount.textContent = `${activeEntries.length} items`;
 
@@ -416,46 +529,100 @@ End of Report
             No ${currentTab} entries recorded yet.
           </div>
         `;
-        return;
-      }
+      } else {
+        entriesList.innerHTML = activeEntries.slice().reverse().map(entry => {
+          const isIncome = entry.type === 'income';
+          const badgeColor = isIncome ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-rose-400 bg-rose-500/10 border-rose-500/20';
+          const amountPrefix = isIncome ? '+' : '-';
+          const isEditing = editingId === entry.id;
 
-      entriesList.innerHTML = activeEntries.slice().reverse().map(entry => {
-        const isIncome = entry.type === 'income';
-        const badgeColor = isIncome ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-rose-400 bg-rose-500/10 border-rose-500/20';
-        const amountPrefix = isIncome ? '+' : '-';
-        const isEditing = editingId === entry.id;
-
-        return `
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-900 border ${isEditing ? 'border-amber-500/60 ring-1 ring-amber-500/30' : 'border-slate-700/60'} rounded-lg sm:rounded-xl p-3 sm:p-4 text-xs sm:text-sm hover:border-slate-600 transition gap-2">
-            <div class="space-y-0.5 sm:space-y-1 flex-1 min-w-0 w-full">
-              <p class="font-semibold text-slate-200 text-sm sm:text-base truncate">${escapeHtml(entry.name)}</p>
-              <p class="text-[10px] sm:text-xs text-slate-400">
-                Left after this entry: 
-                <span class="font-semibold ${entry.balanceAfter < 0 ? 'text-rose-400' : 'text-slate-300'}">
-                  ₹${entry.balanceAfter.toFixed(2)}
+          return `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-900 border ${isEditing ? 'border-amber-500/60 ring-1 ring-amber-500/30' : 'border-slate-700/60'} rounded-lg sm:rounded-xl p-3 sm:p-4 text-xs sm:text-sm hover:border-slate-600 transition gap-2">
+              <div class="space-y-0.5 sm:space-y-1 flex-1 min-w-0 w-full">
+                <p class="font-semibold text-slate-200 text-sm sm:text-base truncate">${escapeHtml(entry.name)}</p>
+                <p class="text-[10px] sm:text-xs text-slate-400">
+                  Left after this entry: 
+                  <span class="font-semibold ${entry.balanceAfter < 0 ? 'text-rose-400' : 'text-slate-300'}">
+                    ₹${entry.balanceAfter.toFixed(2)}
+                  </span>
+                </p>
+              </div>
+              <div class="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+                <span class="font-bold px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl text-xs sm:text-sm border ${badgeColor} whitespace-nowrap">
+                  ${amountPrefix}₹${entry.amount.toFixed(2)}
                 </span>
-              </p>
-            </div>
-            <div class="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
-              <span class="font-bold px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl text-xs sm:text-sm border ${badgeColor} whitespace-nowrap">
-                ${amountPrefix}₹${entry.amount.toFixed(2)}
-              </span>
-              <div class="flex items-center gap-1">
-                <button onclick="editEntry(${entry.id})" class="text-slate-500 hover:text-amber-400 transition p-1.5 sm:p-1" title="Edit Entry">
-                  <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                  </svg>
-                </button>
-                <button onclick="deleteEntry(${entry.id})" class="text-slate-500 hover:text-rose-400 transition p-1.5 sm:p-1" title="Delete Entry">
-                  <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                  </svg>
-                </button>
+                <div class="flex items-center gap-1">
+                  <button onclick="editEntry(${entry.id})" class="text-slate-500 hover:text-amber-400 transition p-1.5 sm:p-1" title="Edit Entry">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                  </button>
+                  <button onclick="deleteEntry(${entry.id})" class="text-slate-500 hover:text-rose-400 transition p-1.5 sm:p-1" title="Delete Entry">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          `;
+        }).join('');
+      }
+
+      // Render Passbook Spreadsheet View
+      passbookCount.textContent = `${entriesWithBalance.length} entries`;
+
+      if (entriesWithBalance.length === 0) {
+        passbookTbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-center py-10 text-slate-500 font-sans text-xs sm:text-sm">
+              No transactions recorded in the ledger yet.
+            </td>
+          </tr>
         `;
-      }).join('');
+      } else {
+        passbookTbody.innerHTML = entriesWithBalance.map((item, idx) => {
+          const isInc = item.type === 'income';
+          const badgeClass = isInc 
+            ? 'text-emerald-400 bg-emerald-950/50 border-emerald-500/30' 
+            : 'text-rose-400 bg-rose-950/50 border-rose-500/30';
+          const typeLabel = isInc ? 'Income' : 'Expense';
+          const rowBg = idx % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/90';
+
+          return `
+            <tr class="${rowBg} hover:bg-slate-800/80 transition-colors">
+              <!-- Sl No. -->
+              <td class="py-2.5 px-3 border-r border-slate-800 text-center font-bold text-slate-400 text-xs">
+                ${item.slNo}
+              </td>
+              <!-- Item Name -->
+              <td class="py-2.5 px-4 border-r border-slate-800 text-center font-sans text-xs sm:text-sm font-medium text-slate-200">
+                <span class="inline-block truncate max-w-[180px] sm:max-w-[260px] align-middle" title="${escapeHtml(item.name)}">
+                  ${escapeHtml(item.name)}
+                </span>
+              </td>
+              <!-- Prev. Balance -->
+              <td class="py-2.5 px-4 border-r border-slate-800 text-center whitespace-nowrap text-slate-400">
+                ₹${item.prevBalance.toFixed(2)}
+              </td>
+              <!-- Trxn Amount -->
+              <td class="py-2.5 px-4 border-r border-slate-800 text-center whitespace-nowrap font-semibold ${isInc ? 'text-emerald-400' : 'text-rose-400'}">
+                ₹${item.amount.toFixed(2)}
+              </td>
+              <!-- Income / Expense -->
+              <td class="py-2.5 px-4 border-r border-slate-800 text-center whitespace-nowrap">
+                <span class="inline-block px-2.5 py-0.5 border rounded-full text-[11px] font-sans font-semibold uppercase tracking-wider ${badgeClass}">
+                  ${typeLabel}
+                </span>
+              </td>
+              <!-- Balance -->
+              <td class="py-2.5 px-4 text-center whitespace-nowrap font-bold ${item.balanceAfter < 0 ? 'text-rose-400' : 'text-emerald-300'}">
+                ₹${item.balanceAfter.toFixed(2)}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
     }
 
     function escapeHtml(str) {
